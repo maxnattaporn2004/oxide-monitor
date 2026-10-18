@@ -1,0 +1,120 @@
+### ไฟล์ทดสอบสำหรับ VS Code (ส่วนขยาย "REST Client") หรือ JetBrains HTTP Client
+### รันระบบก่อน: ดู README.md  —  ค่า @host ด้านล่างตรงกับ PORT ใน .env.example
+@host = http://localhost:3000
+@sim = http://localhost:8788
+
+### ===== สุขภาพระบบ / ภาพรวม =====
+GET {{host}}/health
+
+###
+GET {{host}}/summary
+
+###
+GET {{host}}/overview
+
+### ===== บอท =====
+GET {{host}}/bots
+
+###
+GET {{host}}/bots/bot-01
+
+### สั่งบอท (ส่ง Idempotency-Key ซ้ำ → ได้คำสั่งเดิม ไม่ยิงซ้ำ ดู header Idempotent-Replayed)
+POST {{host}}/bots/bot-01/commands
+Content-Type: application/json
+Idempotency-Key: demo-restart-0001
+
+{ "command": "restart" }
+
+###
+POST {{host}}/bots/bot-03/commands
+Content-Type: application/json
+
+{ "command": "start" }
+
+###
+POST {{host}}/bots/bot-01/commands
+Content-Type: application/json
+
+{ "command": "stop" }
+
+### คำสั่งไม่ถูกต้อง → 400
+POST {{host}}/bots/bot-01/commands
+Content-Type: application/json
+
+{ "command": "explode" }
+
+###
+GET {{host}}/bots/bot-01/commands
+
+### ===== Kill-switch =====
+GET {{host}}/system/kill-switch
+
+###
+PUT {{host}}/system/kill-switch
+Content-Type: application/json
+
+{ "enabled": false }
+
+###
+PUT {{host}}/system/kill-switch
+Content-Type: application/json
+
+{ "enabled": true }
+
+### ===== ออเดอร์: วงจรเต็ม =====
+### 1) สร้าง (ส่งซ้ำได้ → 200 + ออเดอร์เดิม)
+POST {{host}}/orders
+Content-Type: application/json
+
+{ "externalOrderId": "DEMO-1001", "amount": 750.00, "currency": "THB" }
+
+### 2) ชำระเงินแล้ว → QUEUED (ถ้าเปิด AUTO_DISPATCH ระบบจ่ายงานให้เอง)
+POST {{host}}/orders/DEMO-1001/pay
+
+### 3) จ่ายงานด้วยมือ (กดซ้ำได้ ไม่จ่ายซ้ำ)
+POST {{host}}/orders/DEMO-1001/dispatch
+
+###
+GET {{host}}/orders/DEMO-1001
+
+###
+GET {{host}}/orders/DEMO-1001/timeline
+
+### 4) บอทรายงานผล (ใส่ botId ให้ตรงกับที่ได้รับงาน ไม่งั้น 409 wrong_bot)
+POST {{host}}/orders/DEMO-1001/transition
+Content-Type: application/json
+
+{ "to": "COMPLETED", "botId": "bot-01", "reason": "done" }
+
+### เปลี่ยนสถานะที่ไม่ถูกกฎ → 409 invalid_transition
+POST {{host}}/orders/DEMO-1001/transition
+Content-Type: application/json
+
+{ "to": "QUEUED" }
+
+### ยกเลิก
+POST {{host}}/orders/DEMO-1001/cancel
+Content-Type: application/json
+
+{ "reason": "customer_request" }
+
+###
+GET {{host}}/orders?state=IN_PROGRESS&limit=20
+
+### ===== อัปเดตโค้ด (จำลอง) / Audit =====
+POST {{host}}/deployments
+Content-Type: application/json
+
+{ "packageName": "oxide-2026-10-18.zip" }
+
+###
+POST {{host}}/deployments
+Content-Type: application/json
+
+{ "packageName": "oxide-2026-10-18.zip", "botIds": ["bot-02"] }
+
+###
+GET {{host}}/audit-logs?limit=20
+
+### ===== Bot Simulator โดยตรง =====
+GET {{sim}}/bots

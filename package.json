@@ -1,0 +1,19 @@
+{
+  "name": "oxide-monitor-backend",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "engines": { "node": ">=22" },
+  "scripts": {
+    "start": "node --env-file-if-exists=.env src/server.js",
+    "dev": "node --watch --env-file-if-exists=.env src/server.js",
+    "simulator": "node simulator/server.js",
+    "db:init": "node --env-file-if-exists=.env scripts/db-init.js",
+    "test": "node --env-file=.env.example --env-file-if-exists=.env --test --test-concurrency=1 test/*.test.js"
+  },
+  "dependencies": {
+    "express": "^4.21.2",
+    "pg": "^8.13.1",
+    "ws": "^8.18.0"
+  }
+}

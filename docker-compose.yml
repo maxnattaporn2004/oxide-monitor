@@ -1,0 +1,14 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_DB: oxide_monitor
+      POSTGRES_USER: oxide
+      POSTGRES_PASSWORD: oxide_dev
+    ports:
+      - "55432:5432"
+    volumes:
+      - oxide_candidate_pg:/var/lib/postgresql/data
+
+volumes:
+  oxide_candidate_pg:

@@ -1,0 +1,247 @@
+<!doctype html>
+<html lang="th">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Oxide Bot Monitor</title>
+<style>
+  :root {
+    --bg: #0c1420; --panel: #131d2c; --panel2: #18263a; --line: #25354c; --text: #e6edf6; --muted: #8497b0;
+    --green: #3ddc97; --yellow: #f5c451; --red: #ff6b6b; --blue: #6cb6ff; --radius: 14px;
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: radial-gradient(1200px 600px at 80% -10%, #16304d 0%, var(--bg) 60%); color: var(--text);
+    font: 14px/1.5 "Segoe UI", "Noto Sans Thai", system-ui, sans-serif; min-height: 100vh; }
+  .wrap { max-width: 1180px; margin: 0 auto; padding: 20px 16px 60px; }
+  header, .panel { background: var(--panel); border: 1px solid var(--line); border-radius: var(--radius); padding: 16px 18px; margin-bottom: 14px; }
+  header { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
+  h1 { margin: 0; font-size: 20px; } h2 { margin: 0 0 10px; font-size: 15px; color: var(--muted); font-weight: 600; }
+  .sub { color: var(--muted); font-size: 12px; }
+  .row { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+  .spacer { flex: 1; }
+  button { background: var(--panel2); color: var(--text); border: 1px solid var(--line); border-radius: 10px; padding: 7px 14px;
+    font: inherit; cursor: pointer; transition: filter .15s; }
+  button:hover:not(:disabled) { filter: brightness(1.25); } button:disabled { opacity: .4; cursor: not-allowed; }
+  button.go { border-color: #2c7a5a; color: var(--green); } button.stop { border-color: #8a3a3a; color: var(--red); }
+  button.sm { padding: 4px 10px; font-size: 12px; }
+  input { background: #0e1826; border: 1px solid var(--line); color: var(--text); border-radius: 10px; padding: 7px 10px; font: inherit; }
+  .pill { display: inline-block; padding: 2px 10px; border-radius: 99px; font-size: 12px; border: 1px solid var(--line); color: var(--muted); }
+  .pill.green { color: var(--green); border-color: #2c7a5a; } .pill.yellow { color: var(--yellow); border-color: #8a7230; }
+  .pill.red { color: var(--red); border-color: #8a3a3a; } .pill.blue { color: var(--blue); border-color: #35608e; }
+  .ks { font-size: 22px; font-weight: 700; } .ks.on { color: var(--green); } .ks.off { color: var(--red); }
+  .tiles { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; margin-bottom: 14px; }
+  .tile { background: var(--panel); border: 1px solid var(--line); border-radius: var(--radius); padding: 12px 16px; }
+  .tile b { display: block; font-size: 28px; margin-top: 2px; }
+  .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(250px, 1fr)); gap: 12px; }
+  .card { background: var(--panel); border: 1px solid var(--line); border-radius: var(--radius); padding: 14px; display: flex; flex-direction: column; gap: 10px; }
+  .card.busy { border-color: #35608e; } .card.lost { border-color: #8a3a3a; } .card.standby { border-color: #2c7a5a; }
+  .result { border-radius: 10px; padding: 8px 10px; font-size: 12px; border: 1px solid var(--line); background: #0e1826; }
+  .result.COMPLETED { border-color: #2c7a5a; } .result.FAILED { border-color: #8a3a3a; }
+  .meta { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; font-size: 12px; }
+  .meta div { background: #0e1826; border: 1px solid var(--line); border-radius: 10px; padding: 6px 10px; }
+  .meta span { display: block; color: var(--muted); font-size: 11px; }
+  .btns { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; } .btns .full { grid-column: 1 / -1; }
+  table { width: 100%; border-collapse: collapse; } th, td { text-align: left; padding: 7px 8px; border-bottom: 1px solid var(--line); font-size: 13px; }
+  th { color: var(--muted); font-weight: 600; font-size: 12px; } td.act { display: flex; gap: 4px; flex-wrap: wrap; }
+  dialog { background: var(--panel); color: var(--text); border: 1px solid var(--line); border-radius: var(--radius); width: min(680px, 94vw); padding: 18px; }
+  dialog::backdrop { background: rgba(0,0,0,.6); }
+  pre { background: #0e1826; border: 1px solid var(--line); border-radius: 10px; padding: 10px; overflow: auto; max-height: 220px; font-size: 12px; }
+  #toast { position: fixed; bottom: 18px; left: 50%; transform: translateX(-50%); background: var(--panel2); border: 1px solid var(--line);
+    padding: 10px 18px; border-radius: 12px; display: none; z-index: 10; max-width: 90vw; }
+  #toast.err { border-color: #8a3a3a; color: var(--red); }
+  @media (max-width: 720px) { .tiles { grid-template-columns: 1fr 1fr; } }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <div>
+      <h1>Oxide Bot Monitor</h1>
+      <div class="sub">ควบคุมเครื่องแบบรวมศูนย์ · อัปเดตแบบ Real-time ผ่าน WebSocket</div>
+    </div>
+    <div class="row"><span id="conn" class="pill">กำลังเชื่อมต่อ…</span><span id="clock" class="sub"></span><button id="refresh">รีเฟรช</button></div>
+  </header>
+
+  <section class="panel">
+    <h2>Kill-switch ทั้งระบบ</h2>
+    <div class="row">
+      <div><div id="ks" class="ks">—</div><div class="sub" id="ksNote">ปิดทั้งระบบแล้ว ทุกเครื่องจะไม่รับออเดอร์ใหม่</div></div>
+      <span class="spacer"></span>
+      <button class="go" id="ksOn">เปิดทั้งระบบ</button><button class="stop" id="ksOff">ปิดทั้งระบบ</button>
+    </div>
+  </section>
+
+  <section class="panel">
+    <h2>อัปเดตโค้ดบอท (จำลอง)</h2>
+    <div class="row">
+      <input id="pkg" placeholder="ชื่อแพ็กเกจ เช่น oxide-2026-10-18.zip" size="34">
+      <button class="go" id="deployAll">อัปเดตทุกเครื่อง</button>
+      <span class="sub">simulator ไม่มีคำสั่ง update — ระบบจะบันทึก audit log แล้วสั่ง restart บอทที่ online</span>
+    </div>
+  </section>
+
+  <div class="tiles">
+    <div class="tile"><span class="sub">เครื่องออนไลน์</span><b id="tOnline">0</b></div>
+    <div class="tile"><span class="sub">บอทเปิดรับงาน (active)</span><b id="tActive">0</b></div>
+    <div class="tile"><span class="sub">รับรออยู่ (standby)</span><b id="tStandby">0</b></div>
+    <div class="tile"><span class="sub">กำลังทำงาน (in progress)</span><b id="tProgress">0</b></div>
+  </div>
+
+  <h2>เครื่องทั้งหมด</h2>
+  <div class="grid" id="bots"></div>
+
+  <section class="panel" style="margin-top:18px">
+    <h2>ออเดอร์</h2>
+    <form id="newOrder" class="row" style="margin-bottom:10px">
+      <input name="externalOrderId" placeholder="รหัสออเดอร์ เช่น ORD-1001" required>
+      <input name="amount" type="number" min="0" step="0.01" placeholder="ยอดเงิน (THB)" value="100" style="width:140px">
+      <button class="go" type="submit">สร้างออเดอร์</button>
+    </form>
+    <div style="overflow:auto"><table><thead><tr><th>ออเดอร์</th><th>สถานะ</th><th>บอท</th><th>ยอด</th><th>อัปเดต</th><th></th></tr></thead><tbody id="orders"></tbody></table></div>
+  </section>
+</div>
+
+<dialog id="dlg"><div id="dlgBody"></div><div class="row" style="margin-top:12px"><span class="spacer"></span><button id="dlgClose">ปิด</button></div></dialog>
+<div id="toast"></div>
+
+<script>
+const $ = (id) => document.getElementById(id);
+// กัน XSS: ข้อมูลที่มาจากภายนอก (ชื่อบอท/รหัสออเดอร์) ต้องผ่านฟังก์ชันนี้ก่อนใส่ HTML ทุกครั้ง
+const esc = (v) => String(v ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+const fmtTime = (t) => (t ? new Date(t).toLocaleString('th-TH', { hour12: false }) : '—');
+const fmtUptime = (s) => { s = Number(s) || 0; const d = Math.floor(s / 86400), h = Math.floor(s % 86400 / 3600), m = Math.floor(s % 3600 / 60); return d ? `${d}ว ${h}ชม` : h ? `${h}ชม ${m}น` : `${m}น`; };
+let state = null;
+
+function toast(msg, err) { const t = $('toast'); t.textContent = msg; t.className = err ? 'err' : ''; t.style.display = 'block'; clearTimeout(toast.t); toast.t = setTimeout(() => (t.style.display = 'none'), 3500); }
+
+async function api(method, path, body, headers) {
+  const res = await fetch(path, { method, headers: { 'content-type': 'application/json', ...headers }, body: body === undefined ? undefined : JSON.stringify(body) });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(data.message || data.error || `HTTP ${res.status}`);
+  return data;
+}
+const act = async (fn, okMsg) => { try { await fn(); if (okMsg) toast(okMsg); await load(); } catch (e) { toast(e.message, true); } };
+
+const BOT_STATE = { standby: ['รับรออยู่', 'green'], busy: ['กำลังทำงาน', 'blue'], paused: ['ถูกพักโดย Kill-switch', 'yellow'], offline: ['ออฟไลน์', ''], lost: ['หลุดการเชื่อมต่อ', 'red'] };
+const ORDER_STATE = { PENDING_PAYMENT: ['รอชำระเงิน', 'yellow'], QUEUED: ['เข้าคิว', 'yellow'], IN_PROGRESS: ['กำลังทำ', 'blue'], DELAYED: ['ล่าช้า', 'red'], COMPLETED: ['สำเร็จ', 'green'], FAILED: ['ล้มเหลว', 'red'], CANCELLED: ['ยกเลิก', ''] };
+
+function render() {
+  if (!state) return;
+  const { killSwitch, summary, bots, orders } = state;
+  $('ks').textContent = killSwitch.enabled ? 'ทั้งระบบ: เปิด' : 'ทั้งระบบ: ปิด';
+  $('ks').className = 'ks ' + (killSwitch.enabled ? 'on' : 'off');
+  $('ksNote').textContent = killSwitch.enabled ? 'ระบบรับออเดอร์ตามปกติ' : 'ปิดทั้งระบบแล้ว ทุกเครื่องจะไม่รับออเดอร์ใหม่';
+  $('ksOn').disabled = killSwitch.enabled; $('ksOff').disabled = !killSwitch.enabled;
+  $('tOnline').textContent = summary.onlineCount; $('tActive').textContent = summary.activeCount;
+  $('tStandby').textContent = summary.standbyCount; $('tProgress').textContent = summary.inProgressCount;
+
+  $('bots').innerHTML = bots.map((b) => {
+    const [label, color] = BOT_STATE[b.botState] ?? [b.botState, ''];
+    const on = b.status === 'online';
+    const lr = b.lastResult;
+    return `<div class="card ${esc(b.botState)}">
+      <div class="row"><div><b>${esc(b.name)}</b><div class="sub">${esc(b.deviceName)}</div></div><span class="spacer"></span>
+        <span class="pill ${on ? 'green' : b.status === 'error' ? 'red' : ''}">${esc(b.status)}</span></div>
+      <div><span class="pill ${color}">${esc(label)}</span> ${b.currentOrders.map((o) => `<span class="pill blue">${esc(o)}</span>`).join(' ')}</div>
+      <div class="meta">
+        <div><span>Heartbeat</span>${b.lastHeartbeat ? esc(b.heartbeatAgeSeconds) + ' วิที่แล้ว' : '—'}</div>
+        <div><span>Uptime</span>${esc(fmtUptime(b.uptimeSeconds))}</div>
+        <div><span>CPU</span>${esc(b.cpuPercent)}%</div><div><span>Memory</span>${esc(b.memoryPercent)}%</div>
+      </div>
+      <div class="result ${lr ? esc(lr.state) : ''}"><span class="sub">สถานะล่าสุด</span><br>${lr ? `${lr.state === 'COMPLETED' ? 'done' : 'failed'} · ${esc(lr.externalOrderId)}` : 'ยังไม่มีประวัติ'}</div>
+      <div class="btns">
+        <button class="go sm" data-cmd="start" data-bot="${esc(b.id)}" ${on ? 'disabled' : ''}>เปิดบอท</button>
+        <button class="stop sm" data-cmd="stop" data-bot="${esc(b.id)}" ${!on ? 'disabled' : ''}>ปิดบอท</button>
+        <button class="sm full" data-detail="${esc(b.id)}">รายละเอียด (Log / Metrics)</button>
+        <button class="sm full" data-deploy="${esc(b.id)}" ${!on ? 'disabled' : ''}>อัปเดตโค้ด</button>
+      </div></div>`;
+  }).join('') || '<div class="sub">ยังไม่มีบอทในระบบ</div>';
+
+  $('orders').innerHTML = orders.map((o) => {
+    const [label, color] = ORDER_STATE[o.state] ?? [o.state, ''];
+    const ref = encodeURIComponent(o.externalOrderId);
+    const btn = (a, t, cls = '') => `<button class="sm ${cls}" data-order="${esc(ref)}" data-act="${a}" data-bot="${esc(o.botId ?? '')}">${t}</button>`;
+    const acts = { PENDING_PAYMENT: btn('pay', 'ชำระเงินแล้ว', 'go') + btn('cancel', 'ยกเลิก'),
+      QUEUED: btn('dispatch', 'จ่ายงาน', 'go') + btn('cancel', 'ยกเลิก'),
+      IN_PROGRESS: btn('complete', 'สำเร็จ', 'go') + btn('fail', 'ล้มเหลว', 'stop'),
+      DELAYED: btn('complete', 'สำเร็จ', 'go') + btn('fail', 'ล้มเหลว', 'stop') }[o.state] ?? '';
+    return `<tr><td><a href="#" data-timeline="${esc(ref)}" style="color:var(--blue)">${esc(o.externalOrderId)}</a></td>
+      <td><span class="pill ${color}">${esc(label)}</span></td><td>${esc(o.botId ?? '—')}</td>
+      <td>${esc(o.amount)} ${esc(o.currency)}</td><td class="sub">${esc(fmtTime(o.stateChangedAt))}</td><td class="act">${acts}</td></tr>`;
+  }).join('') || '<tr><td colspan="6" class="sub">ยังไม่มีออเดอร์</td></tr>';
+}
+
+async function load() { state = await api('GET', '/overview'); render(); }
+
+$('ksOn').onclick = () => act(() => api('PUT', '/system/kill-switch', { enabled: true }), 'เปิดระบบแล้ว');
+$('ksOff').onclick = () => { if (confirm('ปิดทั้งระบบ? ทุกเครื่องจะไม่รับออเดอร์ใหม่ทันที')) act(() => api('PUT', '/system/kill-switch', { enabled: false }), 'ปิดระบบแล้ว'); };
+$('refresh').onclick = () => act(async () => {});
+const deploy = (botIds) => {
+  const packageName = $('pkg').value.trim();
+  if (!packageName) return toast('กรอกชื่อแพ็กเกจก่อน', true);
+  act(async () => {
+    const r = await api('POST', '/deployments', { packageName, botIds });
+    toast(r.results.map((x) => `${x.botId}: ${x.outcome}`).join(' · '));
+  });
+};
+$('deployAll').onclick = () => deploy(undefined);
+
+$('newOrder').onsubmit = (e) => {
+  e.preventDefault();
+  const f = new FormData(e.target);
+  act(async () => { await api('POST', '/orders', { externalOrderId: f.get('externalOrderId').trim(), amount: Number(f.get('amount')) }); e.target.reset(); }, 'สร้างออเดอร์แล้ว');
+};
+
+document.addEventListener('click', async (e) => {
+  const t = e.target.closest('button, a'); if (!t) return;
+  if (t.dataset.cmd) {
+    // Idempotency-Key ต่อการกดหนึ่งครั้ง: ถ้าเครือข่ายสะดุดแล้วกดซ้ำ คำสั่งจะไม่ถูกส่งสองรอบ
+    const key = crypto.randomUUID();
+    act(() => api('POST', `/bots/${encodeURIComponent(t.dataset.bot)}/commands`, { command: t.dataset.cmd }, { 'idempotency-key': key }), `ส่งคำสั่ง ${t.dataset.cmd} แล้ว`);
+  } else if (t.dataset.deploy) deploy([t.dataset.deploy]);
+  else if (t.dataset.detail) showBot(t.dataset.detail);
+  else if (t.dataset.timeline) { e.preventDefault(); showTimeline(t.dataset.timeline); }
+  else if (t.dataset.order) {
+    const ref = t.dataset.order, a = t.dataset.act, botId = t.dataset.bot || undefined;
+    const call = { pay: () => api('POST', `/orders/${ref}/pay`), dispatch: () => api('POST', `/orders/${ref}/dispatch`),
+      cancel: () => api('POST', `/orders/${ref}/cancel`), complete: () => api('POST', `/orders/${ref}/transition`, { to: 'COMPLETED', botId, reason: 'manual' }),
+      fail: () => api('POST', `/orders/${ref}/transition`, { to: 'FAILED', botId, reason: 'manual' }) }[a];
+    act(call, 'ดำเนินการแล้ว');
+  }
+});
+
+async function showBot(id) {
+  try {
+    const b = await api('GET', `/bots/${encodeURIComponent(id)}`);
+    $('dlgBody').innerHTML = `<h2 style="color:var(--text)">${esc(b.name)} · ${esc(b.deviceName)}</h2>
+      <div class="meta"><div><span>สถานะ</span>${esc(b.status)} / ${esc(b.botState)}</div><div><span>CPU / Memory</span>${esc(b.cpuPercent)}% / ${esc(b.memoryPercent)}%</div>
+      <div><span>Heartbeat ล่าสุด</span>${esc(fmtTime(b.lastHeartbeat))}</div><div><span>Uptime</span>${esc(fmtUptime(b.uptimeSeconds))}</div></div>
+      <h2 style="margin-top:14px">ประวัติคำสั่ง</h2><pre>${esc(b.commands.map((c) => `#${c.id} ${c.command} [${c.status}] by ${c.requestedBy} @ ${fmtTime(c.createdAt)}${c.result?.attempts > 1 ? ` (ลอง ${c.result.attempts} ครั้ง)` : ''}${c.result?.error ? ' — ' + c.result.error : ''}`).join('\n') || 'ยังไม่มี')}</pre>
+      <h2>ออเดอร์ล่าสุดของเครื่องนี้</h2><pre>${esc(b.recentOrders.map((o) => `${o.externalOrderId} → ${o.state} @ ${fmtTime(o.at)}`).join('\n') || 'ยังไม่มี')}</pre>`;
+    $('dlg').showModal();
+  } catch (e) { toast(e.message, true); }
+}
+async function showTimeline(ref) {
+  try {
+    const ev = await api('GET', `/orders/${ref}/timeline`);
+    $('dlgBody').innerHTML = `<h2 style="color:var(--text)">Timeline · ${esc(decodeURIComponent(ref))}</h2><pre>${esc(ev.map((x) => `${fmtTime(x.createdAt)}  ${x.payload.from ?? '·'} → ${x.payload.to}${x.payload.botId ? '  [' + x.payload.botId + ']' : ''}${x.payload.reason ? '  (' + x.payload.reason + ')' : ''}`).join('\n'))}</pre>`;
+    $('dlg').showModal();
+  } catch (e) { toast(e.message, true); }
+}
+$('dlgClose').onclick = () => $('dlg').close();
+
+// ---- Real-time: WebSocket (ต่อใหม่อัตโนมัติ) + polling สำรองทุก 10 วินาที ----
+function connect() {
+  const ws = new WebSocket(`${location.protocol === 'https:' ? 'wss' : 'ws'}://${location.host}/ws`);
+  ws.onopen = () => { $('conn').textContent = '● Live'; $('conn').className = 'pill green'; };
+  ws.onmessage = (m) => { const msg = JSON.parse(m.data); if (msg.type === 'snapshot') { state = msg.data; render(); } };
+  ws.onclose = () => { $('conn').textContent = 'ขาดการเชื่อมต่อ — กำลังต่อใหม่'; $('conn').className = 'pill red'; setTimeout(connect, 2000); };
+  ws.onerror = () => ws.close();
+}
+setInterval(() => { $('clock').textContent = new Date().toLocaleTimeString('th-TH', { hour12: false }); }, 1000);
+setInterval(() => { if (document.visibilityState === 'visible') load().catch(() => {}); }, 10000);
+load().catch((e) => toast(e.message, true));
+connect();
+</script>
+</body>
+</html>
